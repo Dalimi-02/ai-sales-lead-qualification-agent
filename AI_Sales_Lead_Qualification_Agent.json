@@ -1,0 +1,570 @@
+{
+  "name": "AI Sales Lead Qualification Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sales-lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e6a5f4af-5ca5-4e3f-82ba-70e4a6776a93",
+      "name": "Webhook - Receive Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        160
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "jsCode": "const responseBody = $input.first().json;\n\n// Debug: log what we received\nconsole.log('Response:', JSON.stringify(responseBody));\n\nconst contentText = responseBody.choices[0].message.content;\n\nlet parsed;\ntry {\n  parsed = JSON.parse(contentText);\n} catch (e) {\n  const match = contentText.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    parsed = JSON.parse(match[0]);\n  } else {\n    throw new Error('Could not parse response: ' + contentText);\n  }\n}\n\nconst leadData = $('Webhook - Receive Lead').first().json.body;\n\nreturn [{\n  json: {\n    name: leadData.name,\n    email: leadData.email,\n    company: leadData.company,\n    company_size: leadData.company_size,\n    message: leadData.message,\n    classification: parsed.classification,\n    reason: parsed.reason,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "fd84eb6b-de95-459e-af93-c9f31c85c154",
+      "name": "Code - Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-high",
+              "leftValue": "={{ $json.classification }}",
+              "rightValue": "High Value",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9adb7cd6-aa84-4375-a19d-42d8fd3c0955",
+      "name": "IF - High Value?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-medium",
+              "leftValue": "={{ $json.classification }}",
+              "rightValue": "Medium Value",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "de15e989-61b4-491a-9f54-cd149b87aee4",
+      "name": "IF - Medium Value?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "n8n",
+          "mode": "name"
+        },
+        "text": "=\ud83d\udd25 *HIGH VALUE LEAD DETECTED!*\n\n*Name:* {{ $json.name }}\n*Company:* {{ $json.company }}\n*Company Size:* {{ $json.company_size }}\n*Email:* {{ $json.email }}\n\n*AI Classification:* {{ $json.classification }}\n*Reason:* {{ $json.reason }}\n\n*Message:*\n{{ $json.message }}\n\n_Received at: {{ $json.timestamp }}_",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "d8b1a77d-1eba-4d22-94e7-aa3aa3db6d54",
+      "name": "Slack - Notify Sales Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        -80,
+        32
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Lead",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8ed55bb9-fdb0-4d45-8a33-e75b90374836",
+      "name": "Google Sheets - Store Medium Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -80,
+        272
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "googleSheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@example.com",
+        "toEmail": "={{ $json.email }} ",
+        "subject": "Thank you for your interest, {{ $json.name }}!",
+        "html": "=<html>\n<body style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;\">\n  <h2>Thank you for reaching out, {{ $json.name }}!</h2>\n  <p>We've received your inquiry and wanted to acknowledge that we've reviewed your message.</p>\n  <p>Our team will review your needs and get back to you if there's a good fit for our services.</p>\n  <p>In the meantime, feel free to explore our resources:</p>\n  <ul>\n    <li><a href=\"https://yourcompany.com/resources\">Knowledge Base</a></li>\n    <li><a href=\"https://yourcompany.com/pricing\">Pricing Information</a></li>\n    <li><a href=\"https://yourcompany.com/faq\">FAQs</a></li>\n  </ul>\n  <p>Best regards,<br>The Sales Team</p>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "a84ab4ea-7509-4b92-8276-6d1168221c4d",
+      "name": "Email - Auto-Reply Low Value",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        -80,
+        496
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "smtp": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "smtp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "All Leads Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Company Size",
+              "displayName": "Company Size",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Message",
+              "displayName": "Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Classification",
+              "displayName": "Classification",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Reason",
+              "displayName": "Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "d5fcf04f-1118-4123-a5df-2efac46cfced",
+      "name": "Google Sheets - Log All Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        160,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "googleSheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, classification: $('Code - Parse AI Response').first().json.classification, reason: $('Code - Parse AI Response').first().json.reason }) }}",
+        "options": {}
+      },
+      "id": "0e33c664-68c5-48c6-8d83-c72bf1493bbf",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        160,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_GROQ_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"max_tokens\": 512,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Analyze the following sales lead and classify it as High Value, Medium Value, or Low Value. Also provide a short reason.\\n\\nLead information:\\nName: {{ $json.body.name }}\\nCompany: {{ $json.body.company }}\\nCompany size: {{ $json.body.company_size }}\\nMessage: {{ $json.body.message }}\\n\\nReturn output ONLY as valid JSON with no extra text, no markdown, no backticks:\\n{\\\"classification\\\": \\\"High Value / Medium Value / Low Value\\\", \\\"reason\\\": \\\"short explanation\\\"}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -800,
+        160
+      ],
+      "id": "922a9610-cba4-4bee-b064-78d3395f80d6",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "content": "# medium value test\ncurl -X POST https://YOUR_N8N_INSTANCE/webhook/sales-lead \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"name\": \"Sarah Lee\",\n    \"email\": \"sarah@smallbiz.com\",\n    \"company\": \"Small Biz Co\",\n    \"company_size\": \"10-50\",\n    \"message\": \"We are evaluating a few tools, just exploring options\"\n  }'",
+        "height": 384
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        512,
+        32
+      ],
+      "typeVersion": 1,
+      "id": "221eac94-c364-44e1-97e9-02c56aedbade",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Low value test\ncurl -X POST https://YOUR_N8N_INSTANCE/webhook/sales-lead \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"name\": \"John Doe\",\n    \"email\": \"john@gmail.com\",\n    \"company\": \"None\",\n    \"company_size\": \"1\",\n    \"message\": \"Just curious what this does\"\n  }'",
+        "height": 368,
+        "width": 304
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        480,
+        544
+      ],
+      "typeVersion": 1,
+      "id": "f3c25f95-ee29-4662-bab7-7ed97b8aff07",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {
+    "Code - Parse AI Response": [
+      {
+        "json": {
+          "name": "First item",
+          "code": 1
+        }
+      },
+      {
+        "json": {
+          "name": "Second item",
+          "code": 2
+        }
+      }
+    ],
+    "HTTP Request": [
+      {
+        "json": {
+          "name": "First item",
+          "code": 1
+        }
+      },
+      {
+        "json": {
+          "name": "Second item",
+          "code": 2
+        }
+      }
+    ],
+    "Slack - Notify Sales Team": [
+      {
+        "json": {
+          "name": "First item",
+          "code": 1
+        }
+      },
+      {
+        "json": {
+          "name": "Second item",
+          "code": 2
+        }
+      }
+    ],
+    "Google Sheets - Log All Leads": [
+      {
+        "json": {
+          "name": "First item",
+          "code": 1
+        }
+      },
+      {
+        "json": {
+          "name": "Second item",
+          "code": 2
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook - Receive Lead": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "IF - High Value?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF - Medium Value?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - High Value?": {
+      "main": [
+        [
+          {
+            "node": "Slack - Notify Sales Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Medium Value?": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Store Medium Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email - Auto-Reply Low Value",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack - Notify Sales Team": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Log All Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Store Medium Lead": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Log All Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email - Auto-Reply Low Value": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Log All Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Log All Leads": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code - Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "YOUR_VERSION_ID",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_INSTANCE_ID"
+  },
+  "id": "YOUR_WORKFLOW_ID",
+  "tags": [
+    {
+      "updatedAt": "2026-03-05T17:16:31.350Z",
+      "createdAt": "2026-03-05T17:16:31.350Z",
+      "id": "YOUR_TAG_ID",
+      "name": "Sales"
+    },
+    {
+      "updatedAt": "2026-03-05T17:16:31.309Z",
+      "createdAt": "2026-03-05T17:16:31.309Z",
+      "id": "YOUR_TAG_ID",
+      "name": "AI"
+    }
+  ]
+}
