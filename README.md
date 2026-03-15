@@ -2,7 +2,7 @@
 # AI Sales Lead Qualification Agent
 
 An automated AI agent that qualifies incoming sales leads in real-time using **n8n**, **LLaMA 3.3** (via Groq), and conditional routing logic to notify teams or log data based on lead value.
-
+![AI Sales Lead Qualification Agent](n8n.png)
 ## How It Works
 
 ```
